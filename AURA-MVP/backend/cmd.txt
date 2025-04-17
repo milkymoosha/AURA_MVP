@@ -1,0 +1,7 @@
+#start venv 
+.\venv\Scripts\Activate
+#start backend
+uvicorn app:app --reload
+
+#strat frontend
+npm start
