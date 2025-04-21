@@ -28,6 +28,41 @@
   color: #61dafb;
 }
 
+/* App.css */
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 150px;
+  height: 5px;
+  background: #ddd;
+  border-radius: 5px;
+  outline: none;
+  transition: background 0.3s ease;
+}
+
+.slider:focus {
+  background: #4caf50;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #4caf50;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: #4caf50;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+
 @keyframes App-logo-spin {
   from {
     transform: rotate(0deg);

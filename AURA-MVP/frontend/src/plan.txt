@@ -1,0 +1,1 @@
+so when i open the project i want the default animation to be idle, which is idle.glb and there should be an option in the right hand side top to select dance, situps and arms.

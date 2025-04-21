@@ -1,7 +1,7 @@
 import React, { useState, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
-import AvatarLoader from "./AvatarLoader.jsx"; // Import AvatarLoader
+import AvatarLoader from "./AvatarLoader.jsx";
 import axios from "axios";
 import "./App.css";
 
@@ -9,7 +9,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatStarted, setChatStarted] = useState(false);
-  const [animationState, setAnimationState] = useState("idle"); // Animation state (idle, talk, dance)
+  const [animationState, setAnimationState] = useState("idle"); // Default animation state
   const [isTyping, setIsTyping] = useState(false);
 
   const handleMessageChange = (e) => {
@@ -19,16 +19,12 @@ function App() {
   const sendMessage = async () => {
     if (message.trim() === "") return;
 
-    // Add user message to chat history
-    setChatHistory((prevChatHistory) => [
-      ...prevChatHistory,
-      { sender: "user", message },
-    ]);
-
+    setChatHistory((prev) => [...prev, { sender: "user", message }]);
     setMessage("");
 
-    // Set AI animation to "talk" when a message is sent
-    setAnimationState("talk");
+    // Randomly choose talk1 or talk2 for variety
+    const randomTalk = Math.random() < 0.5 ? "talk1" : "talk2";
+    setAnimationState(randomTalk);
     setIsTyping(true);
 
     try {
@@ -36,30 +32,61 @@ function App() {
         message: message,
       });
 
-      // Add AI response to chat history
-      setChatHistory((prevChatHistory) => [
-        ...prevChatHistory,
+      setChatHistory((prev) => [
+        ...prev,
         { sender: "ai", message: response.data.reply },
       ]);
-
-      // Set AI animation back to "idle" after receiving a response
-      setAnimationState("idle");
-      setIsTyping(false);
     } catch (error) {
       console.error("Error sending message:", error);
-      setChatHistory((prevChatHistory) => [
-        ...prevChatHistory,
+      setChatHistory((prev) => [
+        ...prev,
         { sender: "ai", message: "Sorry, I couldn't process your request." },
       ]);
-
-      // Set AI animation back to "idle" in case of error
+    } finally {
       setAnimationState("idle");
       setIsTyping(false);
     }
   };
 
+  // Handle slider change to update animation state
+  const handleAnimationSlider = (e) => {
+    const value = e.target.value;
+    switch (parseInt(value)) {
+      case 0:
+        setAnimationState("idle");
+        break;
+      case 1:
+        setAnimationState("dance");
+        break;
+      case 2:
+        setAnimationState("situps");
+        break;
+      case 3:
+        setAnimationState("arms");
+        break;
+      default:
+        setAnimationState("idle");
+    }
+  };
+
   return (
     <div className="App bg-black min-h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Slider to select animation */}
+      <div className="absolute top-4 right-6 z-10">
+        <input
+          type="range"
+          min="0"
+          max="3"
+          step="1"
+          value={["idle", "dance", "situps", "arms"].indexOf(animationState)}
+          onChange={handleAnimationSlider}
+          className="slider w-32"
+        />
+        <div className="text-white mt-2 text-sm">
+          {animationState.charAt(0).toUpperCase() + animationState.slice(1)}
+        </div>
+      </div>
+
       {/* 3D Avatar Section */}
       <div className="w-full h-screen">
         <Canvas camera={{ position: [0, 1.5, 3] }}>
@@ -67,7 +94,7 @@ function App() {
           <directionalLight position={[2, 2, 2]} intensity={1.2} castShadow />
           <pointLight position={[-2, -2, -2]} intensity={0.5} />
           <Suspense fallback={null}>
-            <AvatarLoader animationState={animationState} /> {/* Pass animation state */}
+            <AvatarLoader animationState={animationState} />
             <ContactShadows
               position={[0, -1.2, 0]}
               opacity={0.7}
@@ -77,7 +104,7 @@ function App() {
               color="#ffffff"
             />
           </Suspense>
-          <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+          <OrbitControls enablePan enableZoom enableRotate />
         </Canvas>
       </div>
 
@@ -112,8 +139,6 @@ function App() {
                   </span>
                 </div>
               ))}
-
-              {/* Display Typing Indicator */}
               {isTyping && (
                 <div className="mb-3 flex justify-start">
                   <span className="px-4 py-2 rounded-xl bg-zinc-800 text-white italic">
@@ -122,7 +147,6 @@ function App() {
                 </div>
               )}
             </div>
-
             <div className="flex items-center border-t border-zinc-700 p-2">
               <input
                 type="text"

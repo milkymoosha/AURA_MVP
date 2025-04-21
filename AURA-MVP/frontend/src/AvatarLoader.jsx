@@ -1,68 +1,73 @@
 // src/AvatarLoader.jsx
-import React, { useRef, useEffect } from "react";
-import { useLoader, useFrame } from "@react-three/fiber";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader";
+import React, { useEffect, useRef, useState } from "react";
+import { useFrame, useLoader } from "@react-three/fiber";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { AnimationMixer } from "three";
 
 const AvatarLoader = ({ animationState }) => {
-  const avatarRef = useRef();
-  const mixer = useRef(null);
+  const group = useRef();
+  const mixer = useRef();
+  const actions = useRef({});
+  const [model, setModel] = useState();
 
-  // Load animations (each file includes the avatar and animation)
-  const idleAnim = useLoader(FBXLoader, "/animations/idle.fbx");
-  const danceAnim = useLoader(FBXLoader, "/animations/dance.fbx");
-  const armsAnim = useLoader(FBXLoader, "/animations/arms.fbx");
-  const situpsAnim = useLoader(FBXLoader, "/animations/situps.fbx");
+  // Load all GLB animation files
+  const idleGLB = useLoader(GLTFLoader, "/models/idle.glb");
+  const armsGLB = useLoader(GLTFLoader, "/models/arms.glb");
+  const situpsGLB = useLoader(GLTFLoader, "/models/situps.glb");
+  const danceGLB = useLoader(GLTFLoader, "/models/dance.glb");
+  const talk1GLB = useLoader(GLTFLoader, "/models/talk1.glb");
+  const talk2GLB = useLoader(GLTFLoader, "/models/talk2.glb");
 
   useEffect(() => {
-    if (idleAnim) {
-      // Set up the avatar and scale it
-      idleAnim.scale.set(1.5, 1.5, 1.5);
-      avatarRef.current.add(idleAnim);
-      mixer.current = new AnimationMixer(idleAnim);
+    if (!idleGLB || !idleGLB.scene) return;
 
-      // Combine the animations with the avatar
-      idleAnim.animations.forEach((clip) => {
-        mixer.current.clipAction(clip).play();
-      });
-    }
+    // Set the model and scale
+    setModel(idleGLB.scene);
+    idleGLB.scene.scale.set(1.5, 1.5, 1.5);
+    group.current.add(idleGLB.scene);
+
+    // Create the animation mixer
+    mixer.current = new AnimationMixer(idleGLB.scene);
+
+    // Assign all available actions
+    actions.current = {
+      idle: mixer.current.clipAction(idleGLB.animations[0]),
+      arms: mixer.current.clipAction(armsGLB.animations[0]),
+      situps: mixer.current.clipAction(situpsGLB.animations[0]),
+      dance: mixer.current.clipAction(danceGLB.animations[0]),
+      talk1: mixer.current.clipAction(talk1GLB.animations[0]),
+      talk2: mixer.current.clipAction(talk2GLB.animations[0]),
+    };
+
+    // Play idle animation initially
+    actions.current["idle"].play();
 
     return () => {
-      if (mixer.current) {
-        mixer.current.stopAllAction();
-      }
+      mixer.current.stopAllAction();
     };
-  }, [idleAnim]);
+  }, [idleGLB]);
 
   useEffect(() => {
-    if (mixer.current) {
-      let action;
+    if (!mixer.current || !actions.current) return;
 
-      if (animationState === "talk") {
-        action = mixer.current.clipAction("Talking"); // Replace with correct animation name
-      } else if (animationState === "idle") {
-        action = mixer.current.clipAction("Idle"); // Replace with correct animation name
-      } else if (animationState === "dance") {
-        action = mixer.current.clipAction("Dance"); // Replace with correct animation name
-      } else if (animationState === "arms") {
-        action = mixer.current.clipAction("Arm Stretch"); // Replace with correct animation name
-      } else if (animationState === "situps") {
-        action = mixer.current.clipAction("Situps"); // Replace with correct animation name
-      }
+    // Stop all current actions
+    Object.values(actions.current).forEach((action) => {
+      action.stop();
+    });
 
-      if (action) {
-        action.play();
-      }
+    // Play the selected animation
+    const selectedAction = actions.current[animationState];
+    if (selectedAction) {
+      selectedAction.reset().fadeIn(0.2).play();
     }
   }, [animationState]);
 
-  useFrame(() => {
-    if (mixer.current) {
-      mixer.current.update(0.01); // Update the animation state
-    }
+  // Keep updating the animation
+  useFrame((_, delta) => {
+    mixer.current?.update(delta);
   });
 
-  return <primitive ref={avatarRef} object={idleAnim} />;
+  return <group ref={group} />;
 };
 
 export default AvatarLoader;
