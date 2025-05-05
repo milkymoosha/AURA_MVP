@@ -55,6 +55,7 @@ git clone https://github.com/yourusername/aura.git
 cd aura
 npm install # or yarn
 npm run dev
+```
 
 
 Make sure your Python backend is running with:
@@ -91,7 +92,6 @@ Responses are streamed and synced with talking animation.
  Emotions / Facial Expressions (🧪 WIP)
  Meeting Mode AI Agent (🧠 Coming soon)
 
-```
 
 
 🧠 built by Madhav(a.k.a. Milkymoosha) and team
