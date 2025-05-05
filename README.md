@@ -55,24 +55,23 @@ git clone https://github.com/yourusername/aura.git
 cd aura
 npm install # or yarn
 npm run dev
-```
 
 
 Make sure your Python backend is running with:
 uvicorn main:app --reload
-
-
+```
+```bash
 🧪 Sneak Peek
 👁️ Avatar visible in the top section
 💬 Real-time chat box at the bottom
 🔊 Voice mode with auto-talking animation
 🎛️ Toggle buttons to trigger animations
-
+```
 🧠 Gemini Integration
 Connected via Python backend using Google Gemini SDK.
 Responses are streamed and synced with talking animation.
 
-
+```bash
 📁 Project Structure
 /aura
  ┣ /public
@@ -83,15 +82,15 @@ Responses are streamed and synced with talking animation.
  ┃ ┗ App.jsx
  ┣ /backend
  ┃ ┗ main.py           ← FastAPI + Gemini
-
-
+```
+```bash
 🧿 Goals
  Real-time Avatar Chat
  Lip Sync & Voice Mode
  Trigger-based Animations
  Emotions / Facial Expressions (🧪 WIP)
  Meeting Mode AI Agent (🧠 Coming soon)
-
+```
 
 
 🧠 built by Madhav(a.k.a. Milkymoosha) and team
