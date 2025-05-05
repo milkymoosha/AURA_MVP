@@ -1,6 +1,6 @@
 # ✨ AURA – 3D AI Avatar Chatbot 👩‍💻🧠💬
 
-![AURA Banner](https://github.com/user-attachments/assets/62b535c3-76de-4b68-baa0-ed87d4a909da)
+![AURA Banner](https://github.com/user-attachments/assets/8b4a2de8-965a-4d7b-876c-aa122734327e)
 
 > 🚀 **Real-time AI. 3D Avatar. Lip Sync. Animations. Premium UI.**  
 > 🧬 Powered by Google Gemini | 💻 Built with Python, React & Three.js
@@ -19,7 +19,7 @@
 
 ---
 
-![AURA May 5, 2025, 04_59_44 PM](https://github.com/user-attachments/assets/8b4a2de8-965a-4d7b-876c-aa122734327e)
+![AURA May 5, 2025, 04_59_44 PM](https://github.com/user-attachments/assets/62b535c3-76de-4b68-baa0-ed87d4a909da)
 
 
 
