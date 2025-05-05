@@ -93,7 +93,7 @@ Responses are streamed and synced with talking animation.
 ```
 
 
-🧠 built by Madhav(a.k.a. Milkymoosha) and team
+🧠 built by Madhav (a.k.a. Milkymoosha) and team.
 
 
 ## License
