@@ -55,8 +55,9 @@ git clone https://github.com/yourusername/aura.git
 cd aura
 npm install # or yarn
 npm run dev
+```
 
-
+```bash
 Make sure your Python backend is running with:
 uvicorn main:app --reload
 ```
