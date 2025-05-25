@@ -9,7 +9,7 @@ function App() {
   const [message, setMessage] = useState("");
   const [chatHistory, setChatHistory] = useState([]);
   const [chatStarted, setChatStarted] = useState(false);
-  const [animationState, setAnimationState] = useState("idle"); // Default animation state
+  const [animationState, setAnimationState] = useState("idle");
   const [isTyping, setIsTyping] = useState(false);
 
   const handleMessageChange = (e) => {
@@ -21,10 +21,7 @@ function App() {
 
     setChatHistory((prev) => [...prev, { sender: "user", message }]);
     setMessage("");
-
-    // Randomly choose talk1 or talk2 for variety
-    const randomTalk = Math.random() < 0.5 ? "talk1" : "talk2";
-    setAnimationState(randomTalk);
+    setAnimationState("talk");
     setIsTyping(true);
 
     try {
@@ -32,15 +29,17 @@ function App() {
         message: message,
       });
 
+      const botReply = response.data.reply || "Here's my response!";
+
       setChatHistory((prev) => [
         ...prev,
-        { sender: "ai", message: response.data.reply },
+        { sender: "ai", message: botReply }
       ]);
     } catch (error) {
       console.error("Error sending message:", error);
       setChatHistory((prev) => [
         ...prev,
-        { sender: "ai", message: "Sorry, I couldn't process your request." },
+        { sender: "ai", message: "Sorry, I couldn't process your request." }
       ]);
     } finally {
       setAnimationState("idle");
@@ -48,7 +47,6 @@ function App() {
     }
   };
 
-  // Handle slider change to update animation state
   const handleAnimationSlider = (e) => {
     const value = e.target.value;
     switch (parseInt(value)) {
@@ -71,7 +69,8 @@ function App() {
 
   return (
     <div className="App bg-black min-h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Slider to select animation */}
+      
+      {/* Animation Slider */}
       <div className="absolute top-4 right-6 z-10">
         <input
           type="range"
@@ -87,7 +86,7 @@ function App() {
         </div>
       </div>
 
-      {/* 3D Avatar Section */}
+      {/* 3D Avatar */}
       <div className="w-full h-screen">
         <Canvas camera={{ position: [0, 1.5, 3] }}>
           <ambientLight intensity={0.5} />
@@ -108,7 +107,7 @@ function App() {
         </Canvas>
       </div>
 
-      {/* Chat Trigger Button */}
+      {/* Start Chat Button */}
       {!chatStarted && (
         <button
           className="absolute bottom-6 bg-white text-black font-semibold py-2 px-6 rounded-full shadow-md hover:bg-gray-200 transition"
@@ -118,10 +117,12 @@ function App() {
         </button>
       )}
 
-      {/* Chat UI */}
+      {/* Chat Section */}
       {chatStarted && (
         <div className="absolute bottom-6 w-full max-w-2xl px-4">
           <div className="bg-zinc-900 text-white rounded-2xl shadow-xl overflow-hidden">
+            
+            {/* Messages */}
             <div className="max-h-80 overflow-y-auto p-4">
               {chatHistory.map((chat, index) => (
                 <div
@@ -147,6 +148,8 @@ function App() {
                 </div>
               )}
             </div>
+
+            {/* Input Box */}
             <div className="flex items-center border-t border-zinc-700 p-2">
               <input
                 type="text"
@@ -163,6 +166,7 @@ function App() {
                 Send
               </button>
             </div>
+
           </div>
         </div>
       )}
