@@ -2,7 +2,6 @@ import React, { useState, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
 import AvatarLoader from "./AvatarLoader.jsx";
-import axios from "axios";
 import "./App.css";
 
 function App() {
@@ -11,6 +10,7 @@ function App() {
   const [chatStarted, setChatStarted] = useState(false);
   const [animationState, setAnimationState] = useState("idle");
   const [isTyping, setIsTyping] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
   const handleMessageChange = (e) => {
     setMessage(e.target.value);
@@ -21,28 +21,48 @@ function App() {
 
     setChatHistory((prev) => [...prev, { sender: "user", message }]);
     setMessage("");
-    setAnimationState("talk");
     setIsTyping(true);
 
     try {
-      const response = await axios.post("http://127.0.0.1:8000/chat", {
-        message: message,
+      const response = await fetch("http://127.0.0.1:8000/speak", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
       });
 
-      const botReply = response.data.reply || "Here's my response!";
+      // Get animation from response header
+      const animation = response.headers.get("x-aura-animation") || "talk1";
+      setAnimationState(animation);
 
+      // Get reply from response header (for chat display)
+      const reply = response.headers.get("x-aura-reply") || "";
+
+      // Show the reply in chat immediately
       setChatHistory((prev) => [
         ...prev,
-        { sender: "ai", message: botReply }
+        { sender: "ai", message: reply }
       ]);
+
+      // Get audio stream and play it
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      setIsSpeaking(true);
+      audio.onended = () => {
+        setAnimationState("idle");
+        setIsSpeaking(false);
+      };
+      audio.play();
     } catch (error) {
       console.error("Error sending message:", error);
       setChatHistory((prev) => [
         ...prev,
         { sender: "ai", message: "Sorry, I couldn't process your request." }
       ]);
-    } finally {
       setAnimationState("idle");
+      setIsSpeaking(false);
+    } finally {
       setIsTyping(false);
     }
   };
@@ -69,7 +89,6 @@ function App() {
 
   return (
     <div className="App bg-black min-h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden">
-      
       {/* Animation Slider */}
       <div className="absolute top-4 right-6 z-10">
         <input
@@ -121,7 +140,6 @@ function App() {
       {chatStarted && (
         <div className="absolute bottom-6 w-full max-w-2xl px-4">
           <div className="bg-zinc-900 text-white rounded-2xl shadow-xl overflow-hidden">
-            
             {/* Messages */}
             <div className="max-h-80 overflow-y-auto p-4">
               {chatHistory.map((chat, index) => (
@@ -147,8 +165,14 @@ function App() {
                   </span>
                 </div>
               )}
+              {isSpeaking && (
+                <div className="mb-3 flex justify-start">
+                  <span className="px-4 py-2 rounded-xl bg-zinc-800 text-white italic">
+                    Speaking...
+                  </span>
+                </div>
+              )}
             </div>
-
             {/* Input Box */}
             <div className="flex items-center border-t border-zinc-700 p-2">
               <input
@@ -166,7 +190,6 @@ function App() {
                 Send
               </button>
             </div>
-
           </div>
         </div>
       )}
