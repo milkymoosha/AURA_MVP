@@ -1,7 +1,11 @@
 #start venv 
 .\venv\Scripts\Activate
 #start backend
+cd backend
 uvicorn app:app --reload
 
 #strat frontend
+cd frontend
 npm start
+
+ollama pull mistral

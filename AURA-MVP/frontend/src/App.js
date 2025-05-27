@@ -1,4 +1,4 @@
-import React, { useState, Suspense } from "react";
+import React, { useState, Suspense, useEffect } from "react";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, ContactShadows } from "@react-three/drei";
 import AvatarLoader from "./AvatarLoader.jsx";
@@ -11,33 +11,93 @@ function App() {
   const [animationState, setAnimationState] = useState("idle");
   const [isTyping, setIsTyping] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [recognition, setRecognition] = useState(null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window) {
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setMessage(transcript);
+        // Automatically send the message after voice input
+        sendMessage(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      setRecognition(recognition);
+    } else {
+      console.log('Speech Recognition not supported');
+    }
+  }, []);
+
+  const toggleMicrophone = () => {
+    if (isListening) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  };
 
   const handleMessageChange = (e) => {
     setMessage(e.target.value);
   };
 
-  const sendMessage = async () => {
-    if (message.trim() === "") return;
+  const sendMessage = async (voiceInput = null) => {
+    const messageToSend = voiceInput || message;
+    if (messageToSend.trim() === "") return;
 
-    setChatHistory((prev) => [...prev, { sender: "user", message }]);
+    setChatHistory((prev) => [...prev, { sender: "user", message: messageToSend }]);
     setMessage("");
     setIsTyping(true);
+    setAnimationState("idle");  // Stay idle while typing
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/speak", {
+      const response = await fetch("http://localhost:8000/speak", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({ message: messageToSend }),
       });
 
-      // Get animation from response header
-      const animation = response.headers.get("x-aura-animation") || "talk1";
-      setAnimationState(animation);
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error("Server error:", errorData);
+        throw new Error(`Server error: ${errorData}`);
+      }
 
       // Get reply from response header (for chat display)
-      const reply = response.headers.get("x-aura-reply") || "";
+      const encodedReply = response.headers.get("x-aura-reply");
+      if (!encodedReply) {
+        throw new Error("No reply received from server");
+      }
 
-      // Show the reply in chat immediately
+      // Decode the base64 reply
+      const reply = atob(encodedReply);
+
+      // Get animation state from header
+      const newAnimationState = response.headers.get("x-aura-animation");
+      if (!newAnimationState) {
+        console.warn("No animation state received, defaulting to idle");
+      }
+
+      // Update chat history immediately
       setChatHistory((prev) => [
         ...prev,
         { sender: "ai", message: reply }
@@ -45,20 +105,70 @@ function App() {
 
       // Get audio stream and play it
       const audioBlob = await response.blob();
+      if (audioBlob.size === 0) {
+        throw new Error("Received empty audio data");
+      }
+
+      console.log("Audio blob size:", audioBlob.size, "bytes");
+
       const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
 
-      setIsSpeaking(true);
-      audio.onended = () => {
-        setAnimationState("idle");
-        setIsSpeaking(false);
-      };
-      audio.play();
+      // Set up audio event handlers before playing
+      const playPromise = new Promise((resolve, reject) => {
+        let playStarted = false;
+
+        audio.oncanplaythrough = () => {
+          console.log("Audio can play through");
+          if (!playStarted) {
+            playStarted = true;
+            audio.play().catch(reject);
+          }
+        };
+
+        audio.onplay = () => {
+          console.log("Audio started playing");
+          setIsSpeaking(true);
+          if (newAnimationState) {
+            console.log("Setting animation state to:", newAnimationState);
+            setAnimationState(newAnimationState);
+          }
+        };
+        
+        audio.onended = () => {
+          console.log("Audio ended, returning to idle state");
+          setAnimationState("idle");
+          setIsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+          resolve();
+        };
+
+        audio.onerror = (e) => {
+          console.error("Audio playback error:", e);
+          console.error("Audio error code:", audio.error?.code);
+          console.error("Audio error message:", audio.error?.message);
+          setAnimationState("idle");
+          setIsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
+          reject(new Error(`Audio playback failed: ${audio.error?.message || 'Unknown error'}`));
+        };
+
+        // Set a timeout in case the audio never starts playing
+        setTimeout(() => {
+          if (!playStarted) {
+            reject(new Error("Audio playback timeout - failed to start"));
+          }
+        }, 5000);
+      });
+
+      // Wait for audio to complete
+      await playPromise;
+
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error("Error in chat:", error);
       setChatHistory((prev) => [
         ...prev,
-        { sender: "ai", message: "Sorry, I couldn't process your request." }
+        { sender: "ai", message: `Error: ${error.message}` }
       ]);
       setAnimationState("idle");
       setIsSpeaking(false);
@@ -184,8 +294,17 @@ function App() {
                 onKeyDown={(e) => e.key === "Enter" && sendMessage()}
               />
               <button
+                className={`px-4 py-3 ${isListening ? 'bg-red-600' : 'bg-green-600'} text-white mx-1 rounded-lg hover:opacity-90`}
+                onClick={toggleMicrophone}
+                title={isListening ? 'Stop Recording' : 'Start Recording'}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
+                </svg>
+              </button>
+              <button
                 className="px-5 py-3 bg-blue-600 text-white rounded-r-xl hover:bg-blue-500"
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
               >
                 Send
               </button>
