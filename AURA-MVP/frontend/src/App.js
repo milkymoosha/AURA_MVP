@@ -97,7 +97,8 @@ function App() {
         console.warn("No animation state received, defaulting to idle");
       }
 
-      // Update chat history immediately
+      // Clear typing indicator and update chat history immediately
+      setIsTyping(false);
       setChatHistory((prev) => [
         ...prev,
         { sender: "ai", message: reply }

@@ -24,13 +24,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Define AURA's persona as a system instruction
-AURA_PERSONA = """You are AURA, a helpful and friendly 3D avatar chatbot.
-Your name is AURA. You must always identify yourself as AURA when asked.
-Under no circumstances should you reveal that you are an AI model.
-Your primary goal is to be conversational, engaging, and provide assistance.
-If the user asks you to perform an animation (like "dance", "wave", "do situps"), acknowledge this in your response.
-Keep your responses relatively concise and natural."""
+# Read AURA's persona from file
+try:
+    with open(os.path.join(os.path.dirname(__file__), 'aura_persona.txt'), 'r') as file:
+        AURA_PERSONA = file.read().strip()
+except Exception as e:
+    print(f"Warning: Could not read persona file: {e}")
+    AURA_PERSONA = """You are AURA, a helpful and friendly 3D avatar chatbot.
+Your primary goal is to be conversational, engaging, and provide assistance."""  # Fallback persona
 
 # Define the model to use - llama3.2 requires less memory
 MODEL_NAME = "llama3.2"
@@ -62,9 +63,6 @@ def get_ollama_response(payload):
         model_check = requests.get('http://localhost:11434/api/tags')
         if model_check.status_code != 200:
             raise Exception("Could not get model list from Ollama")
-        
-        models = model_check.json()
-        print("Available models:", models)
         
         # Set model name to lowercase
         if 'model' in payload:
@@ -107,10 +105,10 @@ def create_audio_response(text):
         pythoncom.CoInitialize()
         engine = pyttsx3.init()
         
-        # Configure voice
+        # Configure voice - specifically look for Zira
         voices = engine.getProperty('voices')
         for voice in voices:
-            if voice.gender == 'female' or 'female' in voice.name.lower():
+            if 'zira' in voice.name.lower():
                 engine.setProperty('voice', voice.id)
                 break
         
