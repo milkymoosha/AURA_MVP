@@ -7,5 +7,3 @@ uvicorn app:app --reload
 #strat frontend
 cd frontend
 npm start
-
-ollama pull mistral

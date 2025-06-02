@@ -1,18 +1,108 @@
-import React, { useState, Suspense, useEffect } from "react";
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, ContactShadows } from "@react-three/drei";
-import AvatarLoader from "./AvatarLoader.jsx";
-import "./App.css";
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import './App.css';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls } from '@react-three/drei';
+import Avatar from './avatar.js';
+import { IoSend, IoMic } from 'react-icons/io5';
 
 function App() {
-  const [message, setMessage] = useState("");
-  const [chatHistory, setChatHistory] = useState([]);
-  const [chatStarted, setChatStarted] = useState(false);
-  const [animationState, setAnimationState] = useState("idle");
-  const [isTyping, setIsTyping] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentAnimation, setCurrentAnimation] = useState('idle');
   const [isListening, setIsListening] = useState(false);
-  const [recognition, setRecognition] = useState(null);
+  const chatContainerRef = useRef(null);
+  const audioRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  // Function to detect animation keyword in text
+  const detectAnimationKeyword = useCallback((text) => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('dance')) return 'dance';
+    if (lowerText.includes('exercise') || lowerText.includes('situp')) return 'situps';
+    if (lowerText.includes('wave') || lowerText.includes('arm')) return 'arms';
+    return null;
+  }, []);
+
+  const handleSendMessage = useCallback(async (e, voiceInput = null) => {
+    if (e) e.preventDefault();
+    
+    const messageText = voiceInput || inputMessage;
+    if (!messageText.trim()) return;
+
+    // Keep avatar in idle state until response
+    setCurrentAnimation('idle');
+
+    const userMessage = {
+      text: messageText,
+      sender: 'user',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInputMessage('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:8000/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: messageText })
+      });
+
+      if (!response.ok) throw new Error('Network response was not ok');
+
+      const audioBlob = await response.blob();
+      const auraReply = atob(response.headers.get('X-Aura-Reply'));
+      
+      // Determine the animation to use
+      const detectedAnimation = detectAnimationKeyword(messageText);
+      const serverAnimation = response.headers.get('X-Aura-Animation');
+      const nextAnimation = detectedAnimation || serverAnimation || 'talk1';
+
+      const auraMessage = {
+        text: auraReply,
+        sender: 'aura',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => [...prev, auraMessage]);
+
+      // Play audio and handle animation
+      const audioUrl = URL.createObjectURL(audioBlob);
+      if (audioRef.current) {
+        audioRef.current.src = audioUrl;
+        
+        // Set up audio event handlers
+        audioRef.current.onplay = () => {
+          console.log('Starting animation:', nextAnimation);
+          setCurrentAnimation(nextAnimation);
+        };
+
+        audioRef.current.onended = () => {
+          console.log('Returning to idle animation');
+          setCurrentAnimation('idle');
+          URL.revokeObjectURL(audioUrl);
+        };
+
+        // Start playing the audio
+        await audioRef.current.play().catch(error => {
+          console.error('Audio playback error:', error);
+          setCurrentAnimation('idle');
+        });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, {
+        text: 'Sorry, I encountered an error. Please try again.',
+        sender: 'aura',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+      setCurrentAnimation('idle');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [inputMessage, detectAnimationKeyword]);
 
   // Initialize speech recognition
   useEffect(() => {
@@ -22,297 +112,164 @@ function App() {
       recognition.interimResults = false;
       recognition.lang = 'en-US';
 
-      recognition.onstart = () => {
-        setIsListening(true);
-      };
-
-      recognition.onend = () => {
-        setIsListening(false);
-      };
-
+      recognition.onstart = () => setIsListening(true);
+      recognition.onend = () => setIsListening(false);
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        setMessage(transcript);
-        // Automatically send the message after voice input
-        sendMessage(transcript);
+        setInputMessage(transcript);
+        handleSendMessage(null, transcript);
       };
-
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         setIsListening(false);
       };
 
-      setRecognition(recognition);
-    } else {
-      console.log('Speech Recognition not supported');
+      recognitionRef.current = recognition;
     }
-  }, []);
+  }, [handleSendMessage]);
+
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const toggleMicrophone = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser');
+      return;
+    }
+
     if (isListening) {
-      recognition.stop();
+      recognitionRef.current.stop();
     } else {
-      recognition.start();
-    }
-  };
-
-  const handleMessageChange = (e) => {
-    setMessage(e.target.value);
-  };
-
-  const sendMessage = async (voiceInput = null) => {
-    const messageToSend = voiceInput || message;
-    if (messageToSend.trim() === "") return;
-
-    setChatHistory((prev) => [...prev, { sender: "user", message: messageToSend }]);
-    setMessage("");
-    setIsTyping(true);
-    setAnimationState("idle");  // Stay idle while typing
-
-    try {
-      const response = await fetch("http://localhost:8000/speak", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: messageToSend }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        console.error("Server error:", errorData);
-        throw new Error(`Server error: ${errorData}`);
-      }
-
-      // Get reply from response header (for chat display)
-      const encodedReply = response.headers.get("x-aura-reply");
-      if (!encodedReply) {
-        throw new Error("No reply received from server");
-      }
-
-      // Decode the base64 reply
-      const reply = atob(encodedReply);
-
-      // Get animation state from header
-      const newAnimationState = response.headers.get("x-aura-animation");
-      if (!newAnimationState) {
-        console.warn("No animation state received, defaulting to idle");
-      }
-
-      // Clear typing indicator and update chat history immediately
-      setIsTyping(false);
-      setChatHistory((prev) => [
-        ...prev,
-        { sender: "ai", message: reply }
-      ]);
-
-      // Get audio stream and play it
-      const audioBlob = await response.blob();
-      if (audioBlob.size === 0) {
-        throw new Error("Received empty audio data");
-      }
-
-      console.log("Audio blob size:", audioBlob.size, "bytes");
-
-      const audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      // Set up audio event handlers before playing
-      const playPromise = new Promise((resolve, reject) => {
-        let playStarted = false;
-
-        audio.oncanplaythrough = () => {
-          console.log("Audio can play through");
-          if (!playStarted) {
-            playStarted = true;
-            audio.play().catch(reject);
-          }
-        };
-
-        audio.onplay = () => {
-          console.log("Audio started playing");
-          setIsSpeaking(true);
-          if (newAnimationState) {
-            console.log("Setting animation state to:", newAnimationState);
-            setAnimationState(newAnimationState);
-          }
-        };
-        
-        audio.onended = () => {
-          console.log("Audio ended, returning to idle state");
-          setAnimationState("idle");
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-          resolve();
-        };
-
-        audio.onerror = (e) => {
-          console.error("Audio playback error:", e);
-          console.error("Audio error code:", audio.error?.code);
-          console.error("Audio error message:", audio.error?.message);
-          setAnimationState("idle");
-          setIsSpeaking(false);
-          URL.revokeObjectURL(audioUrl);
-          reject(new Error(`Audio playback failed: ${audio.error?.message || 'Unknown error'}`));
-        };
-
-        // Set a timeout in case the audio never starts playing
-        setTimeout(() => {
-          if (!playStarted) {
-            reject(new Error("Audio playback timeout - failed to start"));
-          }
-        }, 5000);
-      });
-
-      // Wait for audio to complete
-      await playPromise;
-
-    } catch (error) {
-      console.error("Error in chat:", error);
-      setChatHistory((prev) => [
-        ...prev,
-        { sender: "ai", message: `Error: ${error.message}` }
-      ]);
-      setAnimationState("idle");
-      setIsSpeaking(false);
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  const handleAnimationSlider = (e) => {
-    const value = e.target.value;
-    switch (parseInt(value)) {
-      case 0:
-        setAnimationState("idle");
-        break;
-      case 1:
-        setAnimationState("dance");
-        break;
-      case 2:
-        setAnimationState("situps");
-        break;
-      case 3:
-        setAnimationState("arms");
-        break;
-      default:
-        setAnimationState("idle");
+      recognitionRef.current.start();
     }
   };
 
   return (
-    <div className="App bg-black min-h-screen w-screen flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Animation Slider */}
-      <div className="absolute top-4 right-6 z-10">
-        <input
-          type="range"
-          min="0"
-          max="3"
-          step="1"
-          value={["idle", "dance", "situps", "arms"].indexOf(animationState)}
-          onChange={handleAnimationSlider}
-          className="slider w-32"
-        />
-        <div className="text-white mt-2 text-sm">
-          {animationState.charAt(0).toUpperCase() + animationState.slice(1)}
-        </div>
-      </div>
+    <div className="app-container">
+      {/* Avatar Section */}
+      <div className="avatar-container">
+        <Canvas
+          shadows="soft"
+          camera={{
+            position: [0, 2, 4],
+            fov: 45,
+            near: 0.1,
+            far: 1000
+          }}
+        >
+          {/* Environment and Lighting */}
+          <color attach="background" args={['#2c3e50']} />
+          <fog attach="fog" args={['#2c3e50', 10, 50]} />
+          
+          {/* Lights */}
+          <ambientLight intensity={0.3} />
+          <directionalLight
+            castShadow
+            position={[-2.5, 8, 5]}
+            intensity={2}
+            shadow-mapSize={[2048, 2048]}
+            shadow-bias={-0.0001}
+          >
+            <orthographicCamera attach="shadow-camera" args={[-20, 20, -20, 20, 0.1, 50]} />
+          </directionalLight>
+          <directionalLight 
+            position={[2.5, 5, 5]}
+            intensity={0.8}
+          />
+          <pointLight position={[0, 2, 4]} color="white" intensity={0.3} />
+          
+          {/* Ground Plane with Grid */}
+          <group position={[0, -1.5, 0]}>
+            <mesh receiveShadow rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+              <planeGeometry args={[100, 100]} />
+              <meshStandardMaterial 
+                color="#2c3e50"
+                opacity={0.6}
+                transparent
+                roughness={1}
+                metalness={0}
+                receiveShadow
+              />
+            </mesh>
+            <gridHelper args={[30, 30, '#4c566a', '#4c566a']} position={[0, 0.01, 0]} />
+          </group>
 
-      {/* 3D Avatar */}
-      <div className="w-full h-screen">
-        <Canvas camera={{ position: [0, 1.5, 3] }}>
-          <ambientLight intensity={0.5} />
-          <directionalLight position={[2, 2, 2]} intensity={1.2} castShadow />
-          <pointLight position={[-2, -2, -2]} intensity={0.5} />
-          <Suspense fallback={null}>
-            <AvatarLoader animationState={animationState} />
-            <ContactShadows
-              position={[0, -1.2, 0]}
-              opacity={0.7}
-              scale={10}
-              blur={2.5}
-              far={5}
-              color="#ffffff"
-            />
-          </Suspense>
-          <OrbitControls enablePan enableZoom enableRotate />
+          {/* Avatar */}
+          <group position={[0, -1.5, 0]}>
+            <Avatar animation={currentAnimation} />
+          </group>
+
+          {/* Controls */}
+          <OrbitControls
+            enableZoom={true}
+            enablePan={true}
+            minDistance={2}
+            maxDistance={25}
+            minPolarAngle={Math.PI / 4}
+            maxPolarAngle={Math.PI * 0.75}
+            target={[0, 0.5, 0]}
+          />
         </Canvas>
       </div>
 
-      {/* Start Chat Button */}
-      {!chatStarted && (
-        <button
-          className="absolute bottom-6 bg-white text-black font-semibold py-2 px-6 rounded-full shadow-md hover:bg-gray-200 transition"
-          onClick={() => setChatStarted(true)}
-        >
-          Start Chat
-        </button>
-      )}
-
       {/* Chat Section */}
-      {chatStarted && (
-        <div className="absolute bottom-6 w-full max-w-2xl px-4">
-          <div className="bg-zinc-900 text-white rounded-2xl shadow-xl overflow-hidden">
-            {/* Messages */}
-            <div className="max-h-80 overflow-y-auto p-4">
-              {chatHistory.map((chat, index) => (
-                <div
-                  key={index}
-                  className={`mb-3 flex ${chat.sender === "user" ? "justify-end" : "justify-start"}`}
-                >
-                  <span
-                    className={`px-4 py-2 rounded-xl ${
-                      chat.sender === "user"
-                        ? "bg-blue-600 text-white"
-                        : "bg-zinc-800 text-white"
-                    }`}
-                  >
-                    {chat.message}
-                  </span>
-                </div>
-              ))}
-              {isTyping && (
-                <div className="mb-3 flex justify-start">
-                  <span className="px-4 py-2 rounded-xl bg-zinc-800 text-white italic">
-                    Typing...
-                  </span>
-                </div>
-              )}
-              {isSpeaking && (
-                <div className="mb-3 flex justify-start">
-                  <span className="px-4 py-2 rounded-xl bg-zinc-800 text-white italic">
-                    Speaking...
-                  </span>
-                </div>
-              )}
-            </div>
-            {/* Input Box */}
-            <div className="flex items-center border-t border-zinc-700 p-2">
-              <input
-                type="text"
-                className="flex-1 p-2 rounded-l-lg text-black"
-                placeholder="Type your message..."
-                value={message}
-                onChange={handleMessageChange}
-                onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-              />
-              <button
-                className={`px-4 py-3 ${isListening ? 'bg-red-600' : 'bg-green-600'} text-white mx-1 rounded-lg hover:opacity-90`}
-                onClick={toggleMicrophone}
-                title={isListening ? 'Stop Recording' : 'Start Recording'}
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button
-                className="px-5 py-3 bg-blue-600 text-white rounded-r-xl hover:bg-blue-500"
-                onClick={() => sendMessage()}
-              >
-                Send
-              </button>
-            </div>
+      <div className="chat-section">
+        <div className="chat-header">
+          <h2>Chat with AURA</h2>
+          <div className="status-indicator">
+            {isLoading ? 'Thinking...' : isListening ? 'Listening...' : 'Online'}
           </div>
         </div>
-      )}
+
+        <div className="chat-messages" ref={chatContainerRef}>
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={`message ${message.sender === 'user' ? 'user-message' : 'aura-message'}`}
+            >
+              <div className="message-content">
+                <p>{message.text}</p>
+                <span className="message-timestamp">{message.timestamp}</span>
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="message aura-message">
+              <div className="typing-indicator">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <form onSubmit={handleSendMessage} className="chat-input">
+          <input
+            type="text"
+            value={inputMessage}
+            onChange={(e) => setInputMessage(e.target.value)}
+            placeholder="Type a message..."
+            disabled={isLoading || isListening}
+          />
+          <button type="submit" disabled={isLoading || !inputMessage.trim() || isListening}>
+            <IoSend />
+          </button>
+          <button 
+            type="button" 
+            className={`mic-button ${isListening ? 'listening' : ''}`}
+            onClick={toggleMicrophone}
+            disabled={isLoading}
+          >
+            <IoMic />
+          </button>
+        </form>
+      </div>
+
+      <audio ref={audioRef} />
     </div>
   );
 }

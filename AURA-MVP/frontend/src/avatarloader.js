@@ -46,5 +46,13 @@ const AvatarLoader = ({ animationState }) => {
     }
   }, [animationState]);
 
-  useFrame(() => {
-    if (mixer.current)
+  useFrame((state, delta) => {
+        if (mixer.current) {
+          mixer.current.update(delta);
+        }
+      });
+    
+      return <group ref={avatarRef} />;
+    };
+    
+    export default AvatarLoader;
